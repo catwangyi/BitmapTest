@@ -107,9 +107,9 @@ public class BitmapTest {
     }
     public byte[] convertByte(int data){
         byte b1 = (byte)(data>>24);
-        byte b2 = (byte)((data<<8)>>24);
-        byte b3 = (byte)((data<<16)>>24);
-        byte b4 = (byte)((data<<24)>>24);
+        byte b2 = (byte)((data>>16));
+        byte b3 = (byte)((data>>8));
+        byte b4 = (byte)((data));
         byte[] bytes={b1,b2,b3,b4};
         return bytes;
     }
