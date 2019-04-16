@@ -98,7 +98,9 @@ public class BitmapTest {
                     }
                 }
             }else if (depth==8){
+                //由于是256色，所以颜色表是[256][4]大小的数组，每个分量占1个字节
                 color = new byte[1024];
+
                 dis.read(color,0,color.length);//调色板
 
                 pixelInfo = new byte[height][width];
