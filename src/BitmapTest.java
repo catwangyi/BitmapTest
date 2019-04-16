@@ -1,6 +1,4 @@
-import java.awt.*;
 import java.io.*;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * @author wang
@@ -12,12 +10,14 @@ public class BitmapTest {
     static final int BITMAPINFORMATION=40;//说明位图文件的大小，位图的高度、宽度、位图的颜色格式和压缩类型等信息。共40个字节。
     static int width;//位图的宽
     static int height;//位图的高
-    static int[][] red,green,blue;
-    static final String imgpath="test.bmp";
+    static int depth;//位深
+    static byte[][] red,green,blue;
+    static byte[][] pixelInfo;//8位256色
+    byte[] color;
+    static final String imgpath="origin.bmp";
     byte[] bitmapFileHeader;
     byte[] bitmapInformation;
     byte[] newBitmapInformation;
-    Graphics g;
     public static void main(String[] args) {
         BitmapTest BitmapTest =new BitmapTest();
         BitmapTest.init();
@@ -44,10 +44,12 @@ public class BitmapTest {
 
             //得到bmp文件的数据，将byte型转化为int型
             //得到宽和高
-            width=converInt(bitmapInformation,7);
-            height=converInt(bitmapInformation,11);
+            width=converInt(bitmapInformation,7);//4到7
+            height=converInt(bitmapInformation,11);//8到11
+            depth=convetIntOfDeepth(bitmapInformation,15);//14到15
 
-            int nsizeimage=converInt(bitmapFileHeader,5);
+
+            int nsizeimage=converInt(bitmapFileHeader,5);//原图大小
             int skip_width=0;
             if(width*3 % 4!=0){//后面有补0 的情况
                 skip_width =4-width*3%4;
@@ -55,38 +57,74 @@ public class BitmapTest {
             System.out.println("源图大小:"+nsizeimage);
             System.out.println("width:"+width);
             System.out.println("height:"+height);
+            System.out.println("位深："+depth);
 
-            red=new int[height][width];
-            green=new int[height][width];
-            blue=new int[height][width];
 
-            //将bmp位图数据读取成byte数组;
-            for (int i=0;i<height;i++){
-                for (int j=0;j<width;j++){
-                    try {
-                        blue[i][j]=dis.readByte();
-                        green[i][j]=dis.readByte();
-                        red[i][j]=dis.readByte();
-                        if ((red[i][j]+green[i][j]+blue[i][j])>=0){
-                            red[i][j]=0;//黑色
-                            green[i][j]=0;
-                            blue[i][j]=0;
+
+            if (depth==24){//真彩色，直接描述像素
+
+                red=new byte[height][width];
+                green=new byte[height][width];
+                blue=new byte[height][width];
+
+
+                //将bmp位图数据读取成byte数组;
+                for (int i=0;i<height;i++){
+                    for (int j=0;j<width;j++){
+                        try {
+                            blue[i][j]=dis.readByte();
+                            green[i][j]=dis.readByte();
+                            red[i][j]=dis.readByte();
+
+                        /*if ((Byte.toUnsignedInt(red[i][j])+Byte.toUnsignedInt(green[i][j])+Byte.toUnsignedInt(blue[i][j]))>127*3){
+                            red[i][j]=(byte)(Integer.parseInt("FF",16));//黑色255
+                            green[i][j]=(byte)(Integer.parseInt("FF",16));
+                            blue[i][j]=(byte)(Integer.parseInt("FF",16));
                         }else{
-                            red[i][j]=-1;//白色
-                            green[i][j]=-1;
-                            blue[i][j]=-1;
+                            red[i][j]=Byte.parseByte("00",16);//白色0
+                            green[i][j]=Byte.parseByte("00",16);
+                            blue[i][j]=Byte.parseByte("00",16);
+                        }*/
+                        /*System.out.println("red[i][j]"+Byte.toUnsignedInt(red[i][j]));
+                        System.out.println("green[i][j]"+Byte.toUnsignedInt(green[i][j]));
+                        System.out.println("blue[i][j]"+Byte.toUnsignedInt(blue[i][j]));*/
+                            if(j==width-1){//跳过补填充项
+                                dis.skipBytes(skip_width);
+
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                       /* System.out.println("blue[i][j]"+blue[i][j]);
-                        System.out.println("green[i][j]"+green[i][j]);
-                        System.out.println("red[i][j]"+red[i][j]);*/
-                        if(j==width-1){//跳过补填充项
-                            dis.skipBytes(skip_width);
+                    }
+                }
+            }else if (depth==8){
+                color = new byte[1024];
+                dis.read(color,0,color.length);//调色板
+
+                pixelInfo = new byte[height][width];
+
+                //将bmp位图数据读取成byte数组;
+                for (int i=0;i<height;i++){
+                    for (int j=0;j<width;j++){
+                        try {
+                            pixelInfo[i][j]=dis.readByte();
+                            /*if(Byte.toUnsignedInt(pixelInfo[i][j])>=127){
+                                pixelInfo[i][j]=(byte)(Integer.parseInt("FF",16));//黑色255
+                            }else {
+                                pixelInfo[i][j]=Byte.parseByte("00",16);//白色0
+                            }*/
+                            if(j==width-1){//跳过补填充项
+                                dis.skipBytes(skip_width);
+//                                System.out.println("输出！");
+
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                    } catch (IOException e) {
-                        e.printStackTrace();
                     }
                 }
             }
+
             save();
             Rotate_Reverse();
             Rotate_Left();
@@ -99,10 +137,21 @@ public class BitmapTest {
         }
     }
     public int converInt(byte[] array,int start){
-        int i=(((array[start]&0xff)<<24)
+        /*int i = (((array[start]&0xff)<<24)
                 |((array[start-1]&0xff)<<16)
                 |((array[start-2]&0xff)<<8)
                 |(array[start-3]&0xff));
+        return i;*/
+        int i =Byte.toUnsignedInt(array[start])*16777216//16^6
+                +Byte.toUnsignedInt(array[start-1])*65536//16^4
+                +Byte.toUnsignedInt(array[start-2])*256//16^2
+                +Byte.toUnsignedInt(array[start-3]);//16^0
+        return i;
+    }
+
+    public int convetIntOfDeepth(byte[] array,int start){
+        int i =Byte.toUnsignedInt(array[start])*8
+                +Byte.toUnsignedInt(array[start-1]);
         return i;
     }
     public byte[] convertByte(int data){
@@ -127,17 +176,34 @@ public class BitmapTest {
 
             //输入信息头数据
             dos.write(bitmapInformation);
-            for (int i=0;i<height;i++){
-                for (int j=0;j<width;j++){
-                    dos.write(blue[i][j]);
-                    dos.write(green[i][j]);
-                    dos.write(red[i][j]);
-                    if (j==width-1){
-                        for (int p=skip_width-1;p>=0;p--){//补充字节
-                            dos.writeByte(0);
-                        }
-                    }
 
+            if (depth==24){
+                for (int i=0;i<height;i++){
+                    for (int j=0;j<width;j++){
+                        dos.write(blue[i][j]);
+                        dos.write(green[i][j]);
+                        dos.write(red[i][j]);
+                        if (j==width-1){
+                            for (int p=skip_width-1;p>=0;p--){//补充字节
+                                dos.writeByte(0);
+                            }
+                        }
+
+                    }
+                }
+            }
+            else if (depth==8){
+                dos.write(color);
+                for (int i=0;i<height;i++){
+                    for (int j=0;j<width;j++){
+                        dos.write(pixelInfo[i][j]);
+                        if (j==width-1){
+                            for (int p=0;p<skip_width;p++){//补充字节
+                                dos.writeByte(0);
+                            }
+                        }
+
+                    }
                 }
             }
             dos.flush();
@@ -176,15 +242,30 @@ public class BitmapTest {
             }*/
             //输入信息头数据
             dos.write(newBitmapInformation);
-            for (int j=newHeight-1;j>=0;j--){
-                for (int i=0;i<newWidth;i++){
-                    dos.write(blue[i][j]);
-                    dos.write(green[i][j]);
-                    dos.write(red[i][j]);
 
-                    if (i==newWidth-1){
-                        for (int p=skip_width-1;p>=0;p--){
-                            dos.writeByte(0);
+            if (depth==24){
+                for (int j=newHeight-1;j>=0;j--){
+                    for (int i=0;i<newWidth;i++){
+                        dos.write(blue[i][j]);
+                        dos.write(green[i][j]);
+                        dos.write(red[i][j]);
+
+                        if (i==newWidth-1){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
+                        }
+                    }
+                }
+            }else if (depth==8){
+                dos.write(color);
+                for (int j=newHeight-1;j>=0;j--){
+                    for (int i=0;i<newWidth;i++){
+                        dos.write(pixelInfo[i][j]);
+                        if (i==newWidth-1){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
                         }
                     }
                 }
@@ -226,15 +307,30 @@ public class BitmapTest {
             }*/
             //输入信息头数据
             dos.write(newBitmapInformation);
-            for (int j=0;j<newHeight;j++){
-                for (int i=newWidth-1;i>=0;i--){
-                    dos.write(blue[i][j]);
-                    dos.write(green[i][j]);
-                    dos.write(red[i][j]);
 
-                    if (i==0){
-                        for (int p=skip_width-1;p>=0;p--){
-                            dos.writeByte(0);
+            if (depth==24){
+                for (int j=0;j<newHeight;j++){
+                    for (int i=newWidth-1;i>=0;i--){
+                        dos.write(blue[i][j]);
+                        dos.write(green[i][j]);
+                        dos.write(red[i][j]);
+
+                        if (i==0){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
+                        }
+                    }
+                }
+            }else if (depth==8){
+                dos.write(color);
+                for (int j=0;j<newHeight;j++){
+                    for (int i=newWidth-1;i>=0;i--){
+                        dos.write(pixelInfo[i][j]);
+                        if (i==0){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
                         }
                     }
                 }
@@ -266,24 +362,31 @@ public class BitmapTest {
             }*/
             //输入信息头数据
             dos.write(bitmapInformation);
-            for (int i=height-1;i>=0;i--){
-                for (int j=width-1;j>=0;j--){
-                    /*if ((red[i][j]+green[i][j]+blue[i][j])>=0){
-                        red[i][j]=0;//黑色
-                        green[i][j]=0;
-                        blue[i][j]=0;
-                    }else{
-                        red[i][j]=-1;//白色
-                        green[i][j]=-1;
-                        blue[i][j]=-1;
-                    }*/
-                    dos.write(blue[i][j]);
-                    dos.write(green[i][j]);
-                    dos.write(red[i][j]);
 
-                    if (j==0){
-                        for (int p=skip_width-1;p>=0;p--){
-                            dos.writeByte(0);
+
+            if (depth==24){
+                for (int i=height-1;i>=0;i--){
+                    for (int j=width-1;j>=0;j--){
+                        dos.write(blue[i][j]);
+                        dos.write(green[i][j]);
+                        dos.write(red[i][j]);
+
+                        if (j==0){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
+                        }
+                    }
+                }
+            }else if (depth==8){
+                dos.write(color);
+                for (int i=height-1;i>=0;i--){
+                    for (int j=width-1;j>=0;j--){
+                        dos.write(pixelInfo[i][j]);
+                        if (j==0){
+                            for (int p=skip_width-1;p>=0;p--){
+                                dos.writeByte(0);
+                            }
                         }
                     }
                 }
